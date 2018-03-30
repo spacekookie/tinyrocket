@@ -10,3 +10,9 @@ system-alloc = []
 rocket = "*"
 rocket_codegen = "*"
 rocket_contrib = "*"
+
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
