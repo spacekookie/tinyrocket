@@ -81,9 +81,6 @@ $ ls -al target/release/tinyrocket
 | build   | modifications | size (bytes) | size (human) | % change |
 | :----   | :------------ | :----------- | :----------- | :------- |
 | dev     | none          | 22900656     | 22M          | 0%       |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 
 Ouch. 22MB for the `dev` build, and 6.4MB for the `release` build. Those won't work for us!
@@ -107,9 +104,6 @@ $ ls -al target/release/tinyrocket
 | :----   | :------------ | :----------- | :----------- | :------- |
 | dev     | none          | 22900656     | 22M          | 0%       |
 | dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 
@@ -210,9 +204,6 @@ Not bad! But don't forget, we can stack these changes with `strip`!
 | dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
 | dev     | malloc        | 20508800     | 19.6         | -10.4%   |
 | dev     | all above     | 3751920      | 3.6M         | -83.6%   |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 | release | malloc        | 4293464      | 4.1M         | -36.0%   |
@@ -261,18 +252,11 @@ I then also reran the build with all of our current optimizations, including `st
 | dev     | malloc        | 20508800     | 19.6         | -10.4%   |
 | dev     | panic abort   | 22873512     | 21.8M        | -0.1%    |
 | dev     | all above     | 3715056      | 3.6M         | -83.8%   |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 | release | malloc        | 4293464      | 4.1M         | -36.0%   |
 | release | panic abort   | 6674328      | 6.4M         | -0.5%    |
 | release | all above     | 1458080      | 1.4M         | -78.3%   |
-
-> NOTE: Talk about more aggressive optimizations in the future that
-> will make panic abort more helpful in size by ripping out format
-> machinery and backtrace info
 
 Okay, that one wasn't as impressive, but every little bit helps! What else can we try?
 
@@ -324,9 +308,6 @@ As you can see, our binary decreased in size considerably, however our compile t
 | dev     | panic abort   | 22873512     | 21.8M        | -0.1%    |
 | dev     | No ThinLTO    | 13628168     | 13M          | -40.5%   |
 | dev     | all above     | 3182496      | 3.1M         | -86.1%   |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 | release | malloc        | 4293464      | 4.1M         | -36.0%   |
@@ -389,9 +370,6 @@ Lets reapply all optimizations and see where we are now.
 | dev     | No ThinLTO    | 13628168     | 13M          | -40.5%   |
 | dev     | -Oz           | 20285896     | 20M          | -11.4%   |
 | dev     | all above     | 1036176      | 1012K        | -95.5%   |
-
-| build   | modifications | size (bytes) | size (human) | % change |
-| :----   | :------------ | :----------- | :----------- | :------- |
 | release | none          | 6706984      | 6.4M         | 0%       |
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 | release | malloc        | 4293464      | 4.1M         | -36.0%   |
@@ -408,12 +386,7 @@ But wait! We compiled our application code using all of the great optimizations 
 
 [`xargo`]: https://github.com/japaric/xargo
 
-> NOTE: At the moment, `xargo` requires a nightly compiler. Since our
-> crate is using `rocket`, which requires nightly anyway, it isn't a
-> problem. `xargo` requires a nightly compiler, because a nightly
-> compiler is required to build `core` and `std` at the moment. If
-> use of a nightly compiler is a problem for you, you may want to
-> skip this optimization.
+> NOTE: At the moment, `xargo` requires a nightly compiler. Since our crate is using `rocket`, which requires nightly anyway, it isn't a problem. `xargo` requires a nightly compiler, because a nightly compiler is required to build `core` and `std` at the moment. If use of a nightly compiler is a problem for you, you may want to skip this optimization.
 
 Lets create a new file, `Xargo.toml`, which is used to configure `xargo`. We will fill that file with the following info:
 
@@ -458,3 +431,74 @@ So where are we standing now?
 | release | everything              | 835320       | 816K         | -87.5%   |
 
 So, now we are clear of our 1M goal by almost 200K, and I've exhausted all of the Rust tricks I know. But, I do have one last trick up my sleeve...
+
+## UPX - The Ultimate Packer for eXecutables
+
+For times when binaries absolutely have to be small at any cost, there are tools that perform compression on the binary itself, and replace the initial code with code that extracts the rest of the compressed binary at runtime.
+
+This tool is most commonly used for two purposes:
+
+* Making small binaries for [demoscene] competitions, where 4K, 64K and other small binaries are necessary to compete
+* Malware which attempts to avoid detection by compressing or modifying the binary
+
+Using an application packer is not recommended for shipping binaries to regular desktop users, however for embedded systems where we control the total firmware, and can pay the slight memory and startup time cost for a smaller binary, application packers are an acceptable choice.
+
+Lets run UPX at maximum settings to get the smallest binary possible:
+
+```bash
+$ upx --ultra-brute target/x86_64-unknown-linux-gnu/release/tinyrocket
+# ...
+
+$ ls -al target/x86_64-unknown-linux-gnu/release/tinyrocket
+-rwxr-xr-x 1 james users 247840 Mar 31 19:41 target/x86_64-unknown-linux-gnu/release/tinyrocket
+```
+
+Welp, thats about all we can do here. Lets look at our final standings:
+
+| build   | modifications           | size (bytes) | size (human) | % change |
+| :----   | :------------           | :----------- | :----------- | :------- |
+| release | none                    | 6706984      | 6.4M         | 0%       |
+| release | stripped                | 1749216      | 1.7M         | -73.9%   |
+| release | malloc                  | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort             | 6674328      | 6.4M         | -0.5%    |
+| release | No ThinLTO              | 4885384      | 4.7M         | -27.2%   |
+| release | -Oz                     | 6631248      | 6.4M         | -1.1%    |
+| release | all above               | 1019704      | 996K         | -84.8%   |
+| release | above + xargo - strip   | 1181920      | 1154K        | -82.4%   |
+| release | everything              | 835320       | 816K         | -87.5%   |
+| release | everything + upx        | 247840       | 243K         | -96.3%   |
+
+## Conclusion
+
+Well, hopefully this has been a good look at different ways to shrink a binary in Rust. Overall, I believe most of the default behavior of the Rust Compiler are perfectly sane defaults. I also appreciate that it is easy to change these settings, without too much arcane knowledge.
+
+We ended up with a binary that was less than 4% of the original size, with only minor tradeoffs in convienence and performance.
+
+Just one last step, proof that our binary still works after all of these optimizations:
+
+```bash
+$ ls -hal target/x86_64-unknown-linux-gnu/release/tinyrocket
+-rwxr-xr-x 1 james users 243K Mar 31 19:41 target/x86_64-unknown-linux-gnu/release/tinyrocket
+$ ./target/x86_64-unknown-linux-gnu/release/tinyrocket &
+[1] 31353
+🔧  Configured for development.
+    => address: localhost
+    => port: 8000
+    => log: normal
+    => workers: 8
+    => secret key: generated
+    => limits: forms = 32KiB
+    => tls: disabled
+🛰  Mounting '/':
+    => GET /
+🚀  Rocket has launched from http://localhost:8000
+
+$ curl http://localhost:8000
+
+GET /:
+    => Matched: GET /
+    => Outcome: Success
+    => Response succeeded.
+
+Hello, world!
+```
