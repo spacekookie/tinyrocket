@@ -219,3 +219,55 @@ Not bad! But don't forget, we can stack these changes with `strip`!
 | release | all above     | 1474464      | 1.5M         | -78.0%   |
 
 We're getting closer to the 1MB threshold! But we can still do better...
+
+## Panic Abort
+
+By default, Rust also provides useful information when a panic occurs, or gives some ability to unwind a panic. These behaviors are useful, but also usefully optional! We can tell Cargo to just `abort` on a panic condition, which removes the need for any code that supports nicer panic behavior. We can disable this behavior for both debug and release builds by adding the following lines to our `Cargo.toml`:
+
+```toml
+[profile.release]
+panic = "abort"
+
+[profile.dev]
+panic = "abort"
+```
+
+I reran the build, first with `jemalloc` still included:
+
+```bash
+# dev build
+$ cargo build
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished dev [unoptimized + debuginfo] target(s) in 46.41 secs
+
+# release build
+$ cargo build --release
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished release [optimized] target(s) in 106.17 secs
+
+$ ls -al target/debug/tinyrocket target/release/tinyrocket
+-rwxr-xr-x 2 james users 22873512 Mar 31 16:05 target/debug/tinyrocket
+-rwxr-xr-x 2 james users  6674328 Mar 31 16:06 target/release/tinyrocket
+```
+
+I then also reran the build with all of our current optimizations, including `strip`. Here are the results:
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| dev     | none          | 22900656     | 22M          | 0%       |
+| dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
+| dev     | malloc        | 20508800     | 19.6         | -10.4%   |
+| dev     | panic abort   | 22873512     | 21.8M        | -0.1%    |
+| dev     | all above     | 3715056      | 3.6M         | -83.8%   |
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| release | none          | 6706984      | 6.4M         | 0%       |
+| release | stripped      | 1749216      | 1.7M         | -73.9%   |
+| release | malloc        | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort   | 6674328      | 6.4M         | -0.5%    |
+| release | all above     | 1458080      | 1.4M         | -78.3%   |
+
+Okay, that one wasn't as impressive, but every little bit helps! What else can we try?
