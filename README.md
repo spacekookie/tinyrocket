@@ -335,3 +335,69 @@ As you can see, our binary decreased in size considerably, however our compile t
 | release | all above     | 1228600      | 1.2M         | -81.7%   |
 
 We are so close to that 1MB threshold, but there are still more optimizations to be had!
+
+## Optimize for Size
+
+Another default behavior the Rust compiler has is to use no optimizations for `debug` builds, and to use `-O3` (or roughly, optimize for speed at all costs) for `release` builds. Since we are optimizing for speed here, lets tell Cargo to do that instead! We would like to use LLVM's `-Oz` setting, which is like `-Os` (for speed), plus a couple more optimizations. To do this, lets change the `Cargo.toml` again:
+
+```toml
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+opt-level = "z"
+
+[profile.dev]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+opt-level = "z"
+```
+
+As before, for the first test, I will disable all other optimizations, and only apply this one at first.
+
+```bash
+# dev build
+$ cargo build
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished dev [optimized + debuginfo] target(s) in 99.70 secs
+
+# release build
+$ cargo build --release
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished release [optimized] target(s) in 84.18 secs
+
+$ ls -al target/debug/tinyrocket target/release/tinyrocket
+-rwxr-xr-x 2 james users 20285896 Mar 31 16:32 target/debug/tinyrocket
+-rwxr-xr-x 2 james users  6631248 Mar 31 16:34 target/release/tinyrocket
+```
+
+This had a slight impact on our build times, increasing `debug` because we were not doing any optimizations before, and decreasing `release`, for reasons I am not sure about, other than there are probably fewer or less aggressive optimizations for speed than for size.
+
+Lets reapply all optimizations and see where we are now.
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| dev     | none          | 22900656     | 22M          | 0%       |
+| dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
+| dev     | malloc        | 20508800     | 19.6         | -10.4%   |
+| dev     | panic abort   | 22873512     | 21.8M        | -0.1%    |
+| dev     | No ThinLTO    | 13628168     | 13M          | -40.5%   |
+| dev     | -Oz           | 20285896     | 20M          | -11.4%   |
+| dev     | all above     | 1036176      | 1012K        | -95.5%   |
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| release | none          | 6706984      | 6.4M         | 0%       |
+| release | stripped      | 1749216      | 1.7M         | -73.9%   |
+| release | malloc        | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort   | 6674328      | 6.4M         | -0.5%    |
+| release | No ThinLTO    | 4885384      | 4.7M         | -27.2%   |
+| release | -Oz           | 6631248      | 6.4M         | -1.1%    |
+| release | all above     | 1019704      | 996K         | -84.8%   |
+
+Success! We have broken our 1M threshold for the release build! We also have a pretty small debug build, though it probably isn't very useful for debugging anymore. However, we still have a couple tricks up our sleeve to try and get to that reach goal of 500K...
