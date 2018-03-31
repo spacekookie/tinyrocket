@@ -13,6 +13,12 @@ rocket_contrib = "*"
 
 [profile.release]
 panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
 
 [profile.dev]
 panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false

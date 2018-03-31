@@ -270,4 +270,68 @@ I then also reran the build with all of our current optimizations, including `st
 | release | panic abort   | 6674328      | 6.4M         | -0.5%    |
 | release | all above     | 1458080      | 1.4M         | -78.3%   |
 
+> NOTE: Talk about more aggressive optimizations in the future that
+> will make panic abort more helpful in size by ripping out format
+> machinery and backtrace info
+
 Okay, that one wasn't as impressive, but every little bit helps! What else can we try?
+
+## Use LLVM's full LTO
+
+Rust's compiler was designed to take full advantage of parallel building. This is great for compile times, however it comes at a cost of making it harder to perform total optimization of the binary. This behavior can be disabled, trading better optimization for increased compile times. We can enable these changes by changing the following in our `Cargo.toml`:
+
+```toml
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+
+[profile.dev]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+```
+
+For the initial test, I also disabled `panic = "abort"`, so the changes could be seen in isolation. `jemalloc` was also used for this build.
+
+```bash
+# dev build
+$ cargo build
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished dev [unoptimized + debuginfo] target(s) in 46.41 secs
+
+# release build
+$ cargo build --release
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished release [optimized] target(s) in 106.17 secs
+
+$ ls -al target/debug/tinyrocket target/release/tinyrocket
+-rwxr-xr-x 2 james users 13628168 Mar 31 16:17 target/debug/tinyrocket
+-rwxr-xr-x 2 james users  4885384 Mar 31 16:19 target/release/tinyrocket
+```
+
+As you can see, our binary decreased in size considerably, however our compile times have also increased. Lets reapply all of our optimizations, and see where we are so far.
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| dev     | none          | 22900656     | 22M          | 0%       |
+| dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
+| dev     | malloc        | 20508800     | 19.6         | -10.4%   |
+| dev     | panic abort   | 22873512     | 21.8M        | -0.1%    |
+| dev     | No ThinLTO    | 13628168     | 13M          | -40.5%   |
+| dev     | all above     | 3182496      | 3.1M         | -86.1%   |
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| release | none          | 6706984      | 6.4M         | 0%       |
+| release | stripped      | 1749216      | 1.7M         | -73.9%   |
+| release | malloc        | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort   | 6674328      | 6.4M         | -0.5%    |
+| release | No ThinLTO    | 4885384      | 4.7M         | -27.2%   |
+| release | all above     | 1228600      | 1.2M         | -81.7%   |
+
+We are so close to that 1MB threshold, but there are still more optimizations to be had!
