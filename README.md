@@ -87,3 +87,30 @@ $ ls -al target/release/tinyrocket
 | release | none          | 6706984      | 6.4M         | 0%       |
 
 Ouch. 22MB for the `dev` build, and 6.4MB for the `release` build. Those won't work for us!
+
+## Stripping the Binary
+
+By default, Rust and LLVM retain lots of information in the binary that is very useful for debugging. However, this information is not strictly necessary for running the program. `binutils` provides us with a binary called `strip`, which removes the information. Lets try that. At this stage, there is no modification to the Rust code or compiler settings, just adding a step to your build and release process.
+
+```bash
+$ strip target/debug/tinyrocket
+$ strip target/release/tinyrocket
+$ ls -al target/debug/tinyrocket
+-rwxr-xr-x 2 james users 4022576 Mar 31 15:21 target/debug/tinyrocket
+$ ls -al target/release/tinyrocket
+-rwxr-xr-x 2 james users 1749216 Mar 31 15:21 target/release/tinyrocket
+```
+
+### Current size status
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| dev     | none          | 22900656     | 22M          | 0%       |
+| dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| release | none          | 6706984      | 6.4M         | 0%       |
+| release | stripped      | 1749216      | 1.7M         | -73.9%   |
+
+Not bad for a first step! These binaries will work pretty much the same as the original ones, though they would be harder to debug effectively. This is also often standard practice when releasing binaries.
