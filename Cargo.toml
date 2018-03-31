@@ -3,6 +3,9 @@ name = "tinyrocket"
 version = "0.1.0"
 authors = ["Katharina Fey <kookie@spacekookie.de>"]
 
+[features]
+system-alloc = []
+
 [dependencies]
 rocket = "*"
 rocket_codegen = "*"

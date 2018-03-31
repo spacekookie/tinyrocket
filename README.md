@@ -114,3 +114,108 @@ $ ls -al target/release/tinyrocket
 | release | stripped      | 1749216      | 1.7M         | -73.9%   |
 
 Not bad for a first step! These binaries will work pretty much the same as the original ones, though they would be harder to debug effectively. This is also often standard practice when releasing binaries.
+
+## Removing `jemalloc`
+
+Also by default, Rust uses an allocator called [`jemalloc`], which tends to have better performance for many use cases. However, this is not a requirement to use, and for applications that are not required to be high-performance, or that don't make heavy use of dynamic memory allocation, the difference will be negligible.
+
+[`jemalloc`]: http://jemalloc.net/
+
+Since `jemalloc` is not provided by the system, and must instead be compiled and included in the Rust binary, it increases the total binary size. Lets see what happens when we tell the Rust compiler to instead make use of the existing system allocator, which is typically `malloc`. I will also be making the use of `jemalloc` optional using a configurable feature.
+
+After modification, our `main.rs` now looks like this:
+
+```rust
+#![feature(plugin)]
+#![plugin(rocket_codegen)]
+#![feature(global_allocator)]
+#![feature(allocator_api)]
+
+// When the `system-alloc` feature is used, use the System Allocator
+#[cfg(feature = "system-alloc")]
+mod allocator {
+    use std::heap::System;
+
+    #[global_allocator]
+    pub static mut THE_ALLOC: System = System;
+}
+
+// When the `system-alloc` feature is not used, do nothing,
+// retaining the default functionality (using jemalloc)
+#[cfg(not(feature = "system-alloc"))]
+mod allocator {
+    #[allow(dead_code)]
+    pub static THE_ALLOC: () = ();
+}
+
+#[allow(unused_imports)]
+use allocator::THE_ALLOC;
+
+extern crate rocket;
+
+#[get("/")]
+fn index() -> &'static str {
+    "Hello, world!"
+}
+
+fn main() {
+    rocket::ignite().mount("/", routes![index]).launch();
+}
+```
+
+We also had to add the following lines to our `Cargo.toml` in order to tell Cargo about the new feature we added:
+
+```toml
+[features]
+system-alloc = []
+```
+
+With these changes made, I did a `cargo clean`, and some new `cargo build`s.
+
+```bash
+# dev build
+$ cargo build --features system-alloc
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished dev [unoptimized + debuginfo] target(s) in 47.23 secs
+
+# release build
+$ cargo build --features system-alloc --release
+# ...
+   Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished release [optimized] target(s) in 106.73 secs
+```
+
+Our compile times didn't change much, lets see what kind of binary size we got:
+
+```bash
+$ ls -al target/debug/tinyrocket target/release/tinyrocket
+-rwxr-xr-x 2 james users 20508800 Mar 31 15:49 target/debug/tinyrocket
+-rwxr-xr-x 2 james users  4293464 Mar 31 15:50 target/release/tinyrocket
+```
+
+Not bad! But don't forget, we can stack these changes with `strip`!
+
+```bash
+➜  tinyrocket git:(with-docs) ✗ strip target/debug/tinyrocket
+➜  tinyrocket git:(with-docs) ✗ strip target/release/tinyrocket
+➜  tinyrocket git:(with-docs) ✗ ls -al target/debug/tinyrocket target/release/tinyrocket
+-rwxr-xr-x 2 james users 3751920 Mar 31 15:53 target/debug/tinyrocket
+-rwxr-xr-x 2 james users 1474464 Mar 31 15:53 target/release/tinyrocket
+```
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| dev     | none          | 22900656     | 22M          | 0%       |
+| dev     | stripped      | 4022576      | 3.9M         | -82.4%   |
+| dev     | malloc        | 20508800     | 19.6         | -10.4%   |
+| dev     | all above     | 3751920      | 3.6M         | -83.6%   |
+
+| build   | modifications | size (bytes) | size (human) | % change |
+| :----   | :------------ | :----------- | :----------- | :------- |
+| release | none          | 6706984      | 6.4M         | 0%       |
+| release | stripped      | 1749216      | 1.7M         | -73.9%   |
+| release | malloc        | 4293464      | 4.1M         | -36.0%   |
+| release | all above     | 1474464      | 1.5M         | -78.0%   |
+
+We're getting closer to the 1MB threshold! But we can still do better...
