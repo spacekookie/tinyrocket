@@ -401,3 +401,60 @@ Lets reapply all optimizations and see where we are now.
 | release | all above     | 1019704      | 996K         | -84.8%   |
 
 Success! We have broken our 1M threshold for the release build! We also have a pretty small debug build, though it probably isn't very useful for debugging anymore. However, we still have a couple tricks up our sleeve to try and get to that reach goal of 500K...
+
+## Xargo and rebuilding `core` and `std`
+
+But wait! We compiled our application code using all of the great optimizations we've outlined above, but the `core` and `std` components of the Rust standard library are shipped as pre-built binaries. We can rebuild those components with a convenient tool called [`xargo`], which is typically used for compiling `core` and `std` for targets that don't have official pre-built binaries. `xargo` uses the profile settings from your host crate, so it will have all of the optimizations we've made above.
+
+[`xargo`]: https://github.com/japaric/xargo
+
+> NOTE: At the moment, `xargo` requires a nightly compiler. Since our
+> crate is using `rocket`, which requires nightly anyway, it isn't a
+> problem. `xargo` requires a nightly compiler, because a nightly
+> compiler is required to build `core` and `std` at the moment. If
+> use of a nightly compiler is a problem for you, you may want to
+> skip this optimization.
+
+Lets create a new file, `Xargo.toml`, which is used to configure `xargo`. We will fill that file with the following info:
+
+```toml
+[dependencies.std]
+default-features = false
+features = ["force_alloc_system"]
+```
+
+These settings inform `xargo` that we would like to rebuild `std` (and `core`), and we further configure `std` to force use of the system provided allocator. Because of this, we can remove the changes we made during the "Removing `jemalloc`" step, since it is now no longer an option.
+
+From now own, we will also only be looking at the release build. Lets kick off `xargo`, and `strip` our binary:
+
+```bash
+$ xargo build --target x86_64-unknown-linux-gnu --release
+   Compiling core v0.0.0 (file:///home/james/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libcore)
+   ...
+  Compiling std v0.0.0 (file:///home/james/.rustup/toolchains/nightly-x86_64-unknown-linux-gnu/lib/rustlib/src/rust/src/libstd)
+  Compiling tinyrocket v0.1.0 (file:///home/james/personal/tinyrocket)
+    Finished release [optimized] target(s) in 109.83 secs
+
+$ ls -al target/x86_64-unknown-linux-gnu/release/tinyrocket
+-rwxr-xr-x 2 james users 1181920 Mar 31 19:39 target/x86_64-unknown-linux-gnu/release/tinyrocket
+
+$ strip target/x86_64-unknown-linux-gnu/release/tinyrocket
+$ ls -al target/x86_64-unknown-linux-gnu/release/tinyrocket
+-rwxr-xr-x 2 james users 835320 Mar 31 19:41 target/x86_64-unknown-linux-gnu/release/tinyrocket
+```
+
+So where are we standing now?
+
+| build   | modifications           | size (bytes) | size (human) | % change |
+| :----   | :------------           | :----------- | :----------- | :------- |
+| release | none                    | 6706984      | 6.4M         | 0%       |
+| release | stripped                | 1749216      | 1.7M         | -73.9%   |
+| release | malloc                  | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort             | 6674328      | 6.4M         | -0.5%    |
+| release | No ThinLTO              | 4885384      | 4.7M         | -27.2%   |
+| release | -Oz                     | 6631248      | 6.4M         | -1.1%    |
+| release | all above               | 1019704      | 996K         | -84.8%   |
+| release | above + xargo - strip   | 1181920      | 1154K        | -82.4%   |
+| release | everything              | 835320       | 816K         | -87.5%   |
+
+So, now we are clear of our 1M goal by almost 200K, and I've exhausted all of the Rust tricks I know. But, I do have one last trick up my sleeve...
