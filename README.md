@@ -1,5 +1,7 @@
 # Tiny Rocket
 
+> If you just want to see what the results were without more details, you can skip ahead to the [TL;DR](#tldr) at the end!
+
 At the recent 2018 Rust All Hands, I met up with Katharina [@spacekookie], who works on an [open source project] that creates software for Embedded Linux Devices. She had talked with the other engineers on the project about including some Rust components, however with their limited flash storage space (8MB for the whole firmware, including operating system and all other software), she was worried that the Rust binaries wouldn't fit. The current webserver component for their project was measured in the 100's of KB, while the Rust binary she produced was already multiple MBs, even with a `--release` build!
 
 [@spacekookie]: https://github.com/spacekookie
@@ -502,3 +504,37 @@ GET /:
 
 Hello, world!
 ```
+
+## TL;DR
+
+Here are the binary sizes we were able to achieve:
+
+| build   | modifications           | size (bytes) | size (human) | % change |
+| :----   | :------------           | :----------- | :----------- | :------- |
+| release | none                    | 6706984      | 6.4M         | 0%       |
+| release | stripped                | 1749216      | 1.7M         | -73.9%   |
+| release | malloc                  | 4293464      | 4.1M         | -36.0%   |
+| release | panic abort             | 6674328      | 6.4M         | -0.5%    |
+| release | No ThinLTO              | 4885384      | 4.7M         | -27.2%   |
+| release | -Oz                     | 6631248      | 6.4M         | -1.1%    |
+| release | all above               | 1019704      | 996K         | -84.8%   |
+| release | above + xargo - strip   | 1181920      | 1154K        | -82.4%   |
+| release | everything              | 835320       | 816K         | -87.5%   |
+| release | everything + upx        | 247840       | 243K         | -96.3%   |
+
+Here are the steps we took to reduce the binary size, and the tradeoffs made for binary size:
+
+1. Strip the binary using `strip` from `binutils` - harder to debug
+2. Use the [system allocator] instead of `jemalloc` - less performant dynamic allocations
+3. Use [Abort on Panic] - Less helpful panics
+4. [Disable ThinLTO] - Slower builds
+5. [Optimize for binary size] instead of speed - less performant
+6. Rebuild `std` and `core` with optimizations [using `xargo`] - slower build, requires nightly compiler
+7. Use an application packer like [upx] - slower startup, slightly more memory usage, may be flagged by virus scanners
+
+[system allocator]: https://github.com/spacekookie/tinyrocket/compare/05292e0...f9e628a
+[Abort on Panic]: https://github.com/spacekookie/tinyrocket/compare/f9e628a...cb8acbb
+[Disable ThinLTO]: https://github.com/spacekookie/tinyrocket/compare/cb8acbb...5138ad0
+[Optimize for binary size]: https://github.com/spacekookie/tinyrocket/compare/5138ad0...b6891fd
+[using `xargo`]: https://github.com/spacekookie/tinyrocket/compare/b6891fd...ea325cd
+[upx]: https://upx.github.io/
