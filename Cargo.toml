@@ -7,3 +7,17 @@ authors = ["Katharina Fey <kookie@spacekookie.de>"]
 rocket = "*"
 rocket_codegen = "*"
 rocket_contrib = "*"
+
+[profile.release]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+opt-level = "z"
+
+[profile.dev]
+panic = "abort"
+lto = true
+codegen-units = 1
+incremental = false
+opt-level = "z"

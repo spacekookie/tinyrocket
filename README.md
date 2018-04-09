@@ -321,7 +321,7 @@ We are so close to that 1MB threshold, but there are still more optimizations to
 
 ## Optimize for Size
 
-Another default behavior the Rust compiler has is to use no optimizations for `debug` builds, and to use `-O3` (or roughly, optimize for speed at all costs) for `release` builds. Since we are optimizing for speed here, lets tell Cargo to do that instead! We would like to use LLVM's `-Oz` setting, which is like `-Os` (for speed), plus a couple more optimizations. To do this, lets change the `Cargo.toml` again:
+Another default behavior the Rust compiler has is to use no optimizations for `debug` builds, and to use `-O3` (or roughly, optimize for speed at all costs) for `release` builds. Since we are optimizing for size here, lets tell Cargo to do that instead! We would like to use LLVM's `-Oz` setting, which is like `-Os` (for speed), plus a couple more optimizations. To do this, lets change the `Cargo.toml` again:
 
 ```toml
 [profile.release]
